@@ -2,6 +2,8 @@
 
 Node.js library for reading, editing, merging, and writing CSV and Excel (`.xlsx`) files.
 
+**[View the interactive overview →](https://claude.ai/code/artifact/86c3d821-2900-43ca-8787-4849da41ccdc)**
+
 - **Shared `Table` model** for row/column edits, find & replace, and merge/join — works the same whether the source is CSV or Excel.
 - **Excel-specific extras** — formulas, cell/range styling, number formats, multiple sheets — via direct `exceljs` access on top of the same `Table`.
 
