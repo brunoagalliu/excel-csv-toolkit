@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>excel-csv-toolkit — live editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<div class="titlebar">
+  <span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>
+  <span>excel-csv-toolkit</span>
+  <span class="sep">·</span>
+  <span class="name">live editor — running locally on the real library</span>
+</div>
+
+<div class="app">
+  <aside class="panel">
+    <div>
+      <p class="section-label">A1 — load a file</p>
+      <div class="dropzone" id="dropzone" tabindex="0">
+        <div>Drop a .csv or .xlsx here<br>or click to browse</div>
+        <div class="hint">reads through <code>load()</code></div>
+        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls">
+      </div>
+    </div>
+
+    <div>
+      <p class="section-label">B1 — edit</p>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+
+        <details class="op">
+          <summary>Add column</summary>
+          <div class="op-body">
+            <div>
+              <label for="ac-name">Column name</label>
+              <input type="text" id="ac-name" placeholder="in_stock">
+            </div>
+            <div>
+              <label for="ac-default">Default value</label>
+              <input type="text" id="ac-default" placeholder="true">
+            </div>
+            <button data-op="add-column">Apply</button>
+          </div>
+        </details>
+
+        <details class="op">
+          <summary>Drop column</summary>
+          <div class="op-body">
+            <div>
+              <label for="dc-name">Column name</label>
+              <input type="text" id="dc-name" placeholder="vendor">
+            </div>
+            <button data-op="drop-column">Apply</button>
+          </div>
+        </details>
+
+        <details class="op">
+          <summary>Delete rows where…</summary>
+          <div class="op-body">
+            <div>
+              <label for="dr-column">Column</label>
+              <input type="text" id="dr-column" placeholder="price">
+            </div>
+            <div class="field-row">
+              <div>
+                <label for="dr-operator">Operator</label>
+                <select id="dr-operator">
+                  <option value="eq">=</option>
+                  <option value="neq">≠</option>
+                  <option value="gt">&gt;</option>
+                  <option value="lt">&lt;</option>
+                  <option value="gte">&ge;</option>
+                  <option value="lte">&le;</option>
+                  <option value="contains">contains</option>
+                </select>
+              </div>
+              <div>
+                <label for="dr-value">Value</label>
+                <input type="text" id="dr-value" placeholder="0">
+              </div>
+            </div>
+            <button data-op="delete-rows">Apply</button>
+          </div>
+        </details>
+
+        <details class="op">
+          <summary>Find &amp; replace</summary>
+          <div class="op-body">
+            <div>
+              <label for="fr-column">Column (blank = all)</label>
+              <input type="text" id="fr-column" placeholder="vendor">
+            </div>
+            <div>
+              <label for="fr-pattern">Find</label>
+              <input type="text" id="fr-pattern" placeholder="Ltd.">
+            </div>
+            <div>
+              <label for="fr-replacement">Replace with</label>
+              <input type="text" id="fr-replacement" placeholder="Limited">
+            </div>
+            <div class="check-row">
+              <input type="checkbox" id="fr-regex">
+              <label for="fr-regex" style="margin:0;">Treat find as regex</label>
+            </div>
+            <button data-op="find-replace">Apply</button>
+          </div>
+        </details>
+
+        <details class="op">
+          <summary>Sort</summary>
+          <div class="op-body">
+            <div>
+              <label for="sort-column">Column</label>
+              <input type="text" id="sort-column" placeholder="price">
+            </div>
+            <div class="check-row">
+              <input type="checkbox" id="sort-desc">
+              <label for="sort-desc" style="margin:0;">Descending</label>
+            </div>
+            <button data-op="sort">Apply</button>
+          </div>
+        </details>
+
+        <details class="op">
+          <summary>Remove duplicates</summary>
+          <div class="op-body">
+            <div>
+              <label for="dd-column">Key column (blank = whole row)</label>
+              <input type="text" id="dd-column" placeholder="email">
+            </div>
+            <button data-op="dedupe">Apply</button>
+          </div>
+        </details>
+
+      </div>
+    </div>
+
+    <div>
+      <p class="section-label">C1 — history</p>
+      <div class="log" id="log"></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="error-banner" id="errorBanner"></div>
+
+    <div class="toolbar">
+      <div class="status" id="status">No file loaded yet.</div>
+      <div class="actions">
+        <button id="resetBtn" disabled>Reset</button>
+        <button id="downloadCsvBtn" disabled>Download .csv</button>
+        <button class="primary" id="downloadXlsxBtn" disabled>Download .xlsx</button>
+      </div>
+    </div>
+
+    <div class="table-wrap" id="tableWrap">
+      <div class="empty-state">Upload a CSV or Excel file on the left to see it here — live, editable, powered by the real <code>Table</code> API.</div>
+    </div>
+  </main>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
