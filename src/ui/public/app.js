@@ -9,8 +9,6 @@
   const downloadCsvBtn = document.getElementById('downloadCsvBtn');
   const downloadXlsxBtn = document.getElementById('downloadXlsxBtn');
 
-  const MAX_PREVIEW_ROWS = 500;
-
   function showError(message) {
     errorBanner.textContent = message;
     errorBanner.classList.add('show');
@@ -35,11 +33,10 @@
       return;
     }
 
-    const rows = data.rows.slice(0, MAX_PREVIEW_ROWS);
     const head = `<tr><th class="rownum-col">#</th>${data.columns
       .map((c) => `<th>${escapeHtml(c)}</th>`)
       .join('')}</tr>`;
-    const body = rows
+    const body = data.rows
       .map(
         (row, i) =>
           `<tr><td class="rownum-col">${i + 1}</td>${data.columns
@@ -49,8 +46,8 @@
       .join('');
 
     const truncNote =
-      data.rowCount > MAX_PREVIEW_ROWS
-        ? `<div class="log-entry" style="margin:8px;">Showing first ${MAX_PREVIEW_ROWS} of ${data.rowCount} rows — download to see the rest.</div>`
+      data.rowCount > data.previewRows
+        ? `<div class="log-entry" style="margin:8px;">Showing first ${data.previewRows} of ${data.rowCount} rows — download to see the rest.</div>`
         : '';
 
     tableWrap.innerHTML = `<table class="data"><thead>${head}</thead><tbody>${body}</tbody></table>${truncNote}`;
@@ -163,5 +160,156 @@
   });
   downloadXlsxBtn.addEventListener('click', () => {
     window.location.href = '/api/download?format=xlsx';
+  });
+
+  // ---- segment export ----
+
+  const OPERATOR_OPTIONS = [
+    ['eq', '='], ['neq', '≠'], ['gt', '>'], ['lt', '<'],
+    ['gte', '≥'], ['lte', '≤'], ['contains', 'contains'],
+  ];
+
+  const baseFiltersEl = document.getElementById('baseFilters');
+  const segmentRowsEl = document.getElementById('segmentRows');
+  const segCountsEl = document.getElementById('segCounts');
+
+  function addBaseFilterRow({ column = '', operator = 'eq', value = '' } = {}) {
+    const row = document.createElement('div');
+    row.className = 'seg-row';
+    row.dataset.role = 'base-filter';
+    const options = OPERATOR_OPTIONS.map(
+      ([v, label]) => `<option value="${v}"${v === operator ? ' selected' : ''}>${label}</option>`
+    ).join('');
+    row.innerHTML = `
+      <input type="text" class="bf-column" placeholder="column, e.g. country" value="${escapeAttr(column)}">
+      <div class="seg-line">
+        <select class="bf-operator">${options}</select>
+        <input type="text" class="bf-value" placeholder="value, e.g. US" value="${escapeAttr(value)}">
+      </div>
+      <button type="button" class="remove-row" aria-label="Remove filter">Remove ×</button>
+    `;
+    row.querySelector('.remove-row').addEventListener('click', () => row.remove());
+    baseFiltersEl.appendChild(row);
+  }
+
+  function addSegmentRow({ name = '', column = '', contains = '' } = {}) {
+    const row = document.createElement('div');
+    row.className = 'seg-row';
+    row.dataset.role = 'segment';
+    row.innerHTML = `
+      <input type="text" class="sg-name" placeholder="sheet name, e.g. att" value="${escapeAttr(name)}">
+      <div class="seg-line">
+        <input type="text" class="sg-column" placeholder="column, e.g. campaign" value="${escapeAttr(column)}">
+        <input type="text" class="sg-contains" placeholder="contains, e.g. _att" value="${escapeAttr(contains)}">
+      </div>
+      <button type="button" class="remove-row" aria-label="Remove segment">Remove ×</button>
+    `;
+    row.querySelector('.remove-row').addEventListener('click', () => row.remove());
+    segmentRowsEl.appendChild(row);
+  }
+
+  function escapeAttr(value) {
+    return String(value ?? '').replace(/"/g, '&quot;');
+  }
+
+  function collectBaseFilters() {
+    return [...baseFiltersEl.querySelectorAll('[data-role="base-filter"]')]
+      .map((row) => ({
+        column: row.querySelector('.bf-column').value.trim(),
+        operator: row.querySelector('.bf-operator').value,
+        value: row.querySelector('.bf-value').value,
+      }))
+      .filter((f) => f.column);
+  }
+
+  function collectKeepColumns() {
+    return document
+      .getElementById('segKeepColumns')
+      .value.split(',')
+      .map((c) => c.trim())
+      .filter(Boolean);
+  }
+
+  function collectDedupeColumn() {
+    return document.getElementById('segDedupeColumn').value.trim();
+  }
+
+  function collectSegments() {
+    return [...segmentRowsEl.querySelectorAll('[data-role="segment"]')].map((row) => ({
+      name: row.querySelector('.sg-name').value.trim(),
+      column: row.querySelector('.sg-column').value.trim(),
+      contains: row.querySelector('.sg-contains').value.trim(),
+    }));
+  }
+
+  // Seed with the US / att-vz-tmob carrier-segment workflow as a starting point.
+  addBaseFilterRow({ column: 'country', operator: 'eq', value: 'US' });
+  addSegmentRow({ name: 'att', column: 'campaign', contains: '_att' });
+  addSegmentRow({ name: 'vz', column: 'campaign', contains: '_vz' });
+  addSegmentRow({ name: 'tmob', column: 'campaign', contains: '_tmob' });
+  document.getElementById('segDedupeColumn').value = 'sub2';
+
+  document.getElementById('addBaseFilter').addEventListener('click', () => addBaseFilterRow());
+  document.getElementById('addSegment').addEventListener('click', () => addSegmentRow());
+
+  document.getElementById('previewSegmentsBtn').addEventListener('click', async () => {
+    clearError();
+    segCountsEl.innerHTML = '';
+    try {
+      const res = await fetch('/api/segment-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseFilters: collectBaseFilters(),
+          keepColumns: collectKeepColumns(),
+          segments: collectSegments(),
+          dedupeColumn: collectDedupeColumn(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Preview failed.');
+      segCountsEl.innerHTML = data.counts
+        .map(
+          (c) =>
+            `<div class="log-entry seg-count-row"><span>${escapeHtml(c.name)}</span><span class="n">${c.rowCount} rows</span></div>`
+        )
+        .join('');
+    } catch (err) {
+      showError(err.message);
+    }
+  });
+
+  document.getElementById('generateSegmentsBtn').addEventListener('click', async () => {
+    clearError();
+    try {
+      const res = await fetch('/api/export-segments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseFilters: collectBaseFilters(),
+          keepColumns: collectKeepColumns(),
+          segments: collectSegments(),
+          dedupeColumn: collectDedupeColumn(),
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Export failed.');
+      }
+      const disposition = res.headers.get('Content-Disposition') || '';
+      const match = /filename="?([^"]+)"?/.exec(disposition);
+      const filename = match ? match[1] : 'segments.xlsx';
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      showError(err.message);
+    }
   });
 })();

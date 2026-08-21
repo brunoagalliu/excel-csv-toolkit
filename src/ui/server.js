@@ -7,10 +7,15 @@ const fs = require('fs');
 const express = require('express');
 const multer = require('multer');
 
-const { load, save, Table } = require('../index');
+const { load, save, Table, newXlsx } = require('../index');
 
 const PORT = process.env.PORT || 3210;
 const upload = multer({ dest: os.tmpdir() });
+
+// Only ever send the browser a preview slice — for a million-row table the
+// full JSON payload would be tens of MB and slow to parse for no benefit,
+// since downloads and edits both operate on the full server-side table.
+const PREVIEW_ROWS = 500;
 
 // Single in-memory session: this is a local demo tool for one user at a time,
 // not a multi-tenant server.
@@ -29,14 +34,89 @@ function requireSession(res) {
 }
 
 function snapshot(extra = {}) {
+  const rowCount = session.table.rowCount;
   return {
     columns: session.table.columns,
-    rows: session.table.toRows(),
-    rowCount: session.table.rowCount,
+    rows: session.table.rows.slice(0, PREVIEW_ROWS).map((row) => {
+      const out = {};
+      session.table.columns.forEach((c) => (out[c] = row[c] ?? ''));
+      return out;
+    }),
+    rowCount,
+    previewRows: Math.min(PREVIEW_ROWS, rowCount),
     log: session.log,
     fileBase: session.fileBase,
     ...extra,
   };
+}
+
+function selectColumns(table, columns) {
+  const cols = columns && columns.length ? columns : table.columns;
+  const rows = table.rows.map((row) => {
+    const out = {};
+    cols.forEach((c) => (out[c] = row[c]));
+    return out;
+  });
+  return new Table(cols, rows);
+}
+
+/**
+ * Applies base filters, then dedupes, then splits into segments. Deduping
+ * before the per-segment split (rather than within each segment) means a
+ * key that appears under two different segments only survives in whichever
+ * one its first occurrence belongs to, instead of showing up in both sheets.
+ */
+function buildSegments(table, baseFilters, keepColumns, segments, dedupeColumn) {
+  let base = table;
+  (baseFilters || []).forEach((f) => {
+    if (!f.column) return;
+    base = base.filter((row) => compareValues(row[f.column], f.operator, f.value));
+  });
+
+  if (dedupeColumn) {
+    // .filter(() => true) forces an independent copy — base may still be
+    // the original session table (e.g. no base filters given), and dedupe()
+    // mutates in place, so we must never dedupe that shared reference.
+    base = base.filter(() => true).dedupe((row) => row[dedupeColumn]);
+  }
+
+  return segments.map((seg) => {
+    const segTable =
+      seg.column && seg.contains
+        ? base.filter((row) => compareValues(row[seg.column], 'contains', seg.contains))
+        : base;
+    return { name: seg.name, table: selectColumns(segTable, keepColumns) };
+  });
+}
+
+function validateSegmentRequest(table, baseFilters, keepColumns, segments, dedupeColumn) {
+  const cols = table.columns;
+  (baseFilters || []).forEach((f) => {
+    if (f.column && !cols.includes(f.column)) throw new Error(`Column "${f.column}" not found.`);
+  });
+  (keepColumns || []).forEach((c) => {
+    if (!cols.includes(c)) throw new Error(`Column "${c}" not found.`);
+  });
+  if (dedupeColumn && !cols.includes(dedupeColumn)) {
+    throw new Error(`Column "${dedupeColumn}" not found.`);
+  }
+  if (!segments || !segments.length) throw new Error('Add at least one segment.');
+  segments.forEach((seg) => {
+    if (!seg.name || !seg.name.trim()) throw new Error('Every segment needs a sheet name.');
+    if (seg.column && !cols.includes(seg.column)) throw new Error(`Column "${seg.column}" not found.`);
+  });
+}
+
+function uniqueSheetName(name, used) {
+  const base = String(name).trim().slice(0, 31) || 'Sheet';
+  let candidate = base;
+  let n = 2;
+  while (used.has(candidate)) {
+    const suffix = `_${n++}`;
+    candidate = base.slice(0, 31 - suffix.length) + suffix;
+  }
+  used.add(candidate);
+  return candidate;
 }
 
 function coerce(value) {
@@ -203,6 +283,44 @@ app.get('/api/download', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/segment-preview', (req, res) => {
+  const s = requireSession(res);
+  if (!s) return;
+  const { baseFilters = [], keepColumns = [], segments = [], dedupeColumn = '' } = req.body;
+  try {
+    validateSegmentRequest(s.table, baseFilters, keepColumns, segments, dedupeColumn);
+    const built = buildSegments(s.table, baseFilters, keepColumns, segments, dedupeColumn);
+    res.json({ counts: built.map((seg) => ({ name: seg.name, rowCount: seg.table.rowCount })) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/export-segments', async (req, res) => {
+  const s = requireSession(res);
+  if (!s) return;
+  const { baseFilters = [], keepColumns = [], segments = [], dedupeColumn = '' } = req.body;
+  try {
+    validateSegmentRequest(s.table, baseFilters, keepColumns, segments, dedupeColumn);
+    const built = buildSegments(s.table, baseFilters, keepColumns, segments, dedupeColumn);
+
+    const wb = newXlsx();
+    const used = new Set();
+    built.forEach((seg) => {
+      wb.addSheet(uniqueSheetName(seg.name, used), seg.table);
+    });
+
+    const tempPath = path.join(os.tmpdir(), `${crypto.randomUUID()}.xlsx`);
+    await wb.save(tempPath);
+    res.download(tempPath, `${s.fileBase}-segments.xlsx`, (err) => {
+      fs.unlink(tempPath, () => {});
+      if (err && !res.headersSent) res.status(500).json({ error: err.message });
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 

@@ -141,7 +141,37 @@
     </div>
 
     <div>
-      <p class="section-label">C1 — history</p>
+      <p class="section-label">C1 — export segments</p>
+      <details class="op" open>
+        <summary>Split into per-segment sheets</summary>
+        <div class="op-body">
+
+          <label>Keep rows where (all must match)</label>
+          <div id="baseFilters"></div>
+          <button type="button" id="addBaseFilter">+ Add filter</button>
+
+          <label for="segKeepColumns" style="margin-top:6px;">Columns to keep in each sheet</label>
+          <input type="text" id="segKeepColumns" placeholder="sub2, sub4">
+
+          <label for="segDedupeColumn" style="margin-top:6px;">Dedupe each sheet by (blank = skip)</label>
+          <input type="text" id="segDedupeColumn" placeholder="sub2">
+
+          <label style="margin-top:6px;">One sheet per segment</label>
+          <div id="segmentRows"></div>
+          <button type="button" id="addSegment">+ Add segment</button>
+
+          <div id="segCounts" class="log" style="margin-top:4px;"></div>
+
+          <div style="display:flex; gap:8px; margin-top:6px;">
+            <button type="button" id="previewSegmentsBtn">Preview counts</button>
+            <button type="button" class="primary" id="generateSegmentsBtn">Generate workbook</button>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div>
+      <p class="section-label">D1 — history</p>
       <div class="log" id="log"></div>
     </div>
   </aside>

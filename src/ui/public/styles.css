@@ -181,6 +181,41 @@ input:focus, select:focus, button:focus-visible, .dropzone:focus-visible {
 
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
+.seg-row {
+  border: 1px solid var(--grid);
+  padding: 10px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.seg-row .seg-line { display: flex; gap: 6px; }
+.seg-row input { min-width: 0; flex: 1; }
+.seg-row select { flex: 0 0 auto; width: auto; }
+.remove-row {
+  align-self: flex-end;
+  padding: 3px 8px;
+  line-height: 1.4;
+  font-size: 11px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-soft);
+}
+.remove-row:hover { color: var(--ref-red); }
+
+#addBaseFilter, #addSegment {
+  width: 100%;
+  color: var(--ink-soft);
+  border-style: dashed;
+}
+
+.seg-count-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.seg-count-row .n { font-variant-numeric: tabular-nums; color: var(--ink); }
+
 button {
   font-family: var(--font-mono);
   font-size: 12px;
