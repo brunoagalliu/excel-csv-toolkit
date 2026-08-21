@@ -18,7 +18,10 @@
   }
 
   function render(data) {
-    status.innerHTML = `<strong>${data.fileBase}</strong> — ${data.rowCount} rows, ${data.columns.length} columns`;
+    status.innerHTML =
+      data.rowCount !== data.originalRowCount
+        ? `<strong>${data.rowCount} of ${data.originalRowCount}</strong> rows kept — ${data.fileBase}, ${data.columns.length} columns`
+        : `<strong>${data.fileBase}</strong> — ${data.rowCount} rows, ${data.columns.length} columns`;
     resetBtn.disabled = false;
     downloadCsvBtn.disabled = false;
     downloadXlsxBtn.disabled = false;
@@ -75,8 +78,10 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Request failed.');
       render(data);
+      return data;
     } catch (err) {
       showError(err.message);
+      return null;
     }
   }
 
@@ -147,8 +152,6 @@
           column: document.getElementById('sort-column').value.trim(),
           desc: document.getElementById('sort-desc').checked,
         };
-      } else if (op === 'dedupe') {
-        body = { column: document.getElementById('dd-column').value.trim() };
       }
       callApi(`/api/op/${op}`, body);
     });
@@ -162,35 +165,43 @@
     window.location.href = '/api/download?format=xlsx';
   });
 
-  // ---- segment export ----
+  // ---- step 1: filter, step 2: keep unique ----
 
-  const OPERATOR_OPTIONS = [
-    ['eq', '='], ['neq', '≠'], ['gt', '>'], ['lt', '<'],
-    ['gte', '≥'], ['lte', '≤'], ['contains', 'contains'],
-  ];
+  const step1Result = document.getElementById('step1Result');
+  const step2Result = document.getElementById('step2Result');
 
-  const baseFiltersEl = document.getElementById('baseFilters');
+  function showStepResult(el, data) {
+    if (!data) return;
+    el.textContent = data.log[data.log.length - 1];
+    el.classList.add('show');
+  }
+
+  document.getElementById('step1Apply').addEventListener('click', async () => {
+    const column = document.getElementById('step1-column').value.trim();
+    if (!column) return showError('Enter a column to filter on.');
+    const data = await callApi('/api/op/keep-rows', {
+      column,
+      operator: document.getElementById('step1-operator').value,
+      value: document.getElementById('step1-value').value,
+    });
+    showStepResult(step1Result, data);
+  });
+
+  document.getElementById('step2Apply').addEventListener('click', async () => {
+    const data = await callApi('/api/op/dedupe', {
+      column: document.getElementById('step2-column').value.trim(),
+    });
+    showStepResult(step2Result, data);
+  });
+
+  document.getElementById('step1-column').value = 'country';
+  document.getElementById('step1-value').value = 'US';
+  document.getElementById('step2-column').value = 'sub2';
+
+  // ---- step 3: split into files ----
+
   const segmentRowsEl = document.getElementById('segmentRows');
   const segCountsEl = document.getElementById('segCounts');
-
-  function addBaseFilterRow({ column = '', operator = 'eq', value = '' } = {}) {
-    const row = document.createElement('div');
-    row.className = 'seg-row';
-    row.dataset.role = 'base-filter';
-    const options = OPERATOR_OPTIONS.map(
-      ([v, label]) => `<option value="${v}"${v === operator ? ' selected' : ''}>${label}</option>`
-    ).join('');
-    row.innerHTML = `
-      <input type="text" class="bf-column" placeholder="column, e.g. country" value="${escapeAttr(column)}">
-      <div class="seg-line">
-        <select class="bf-operator">${options}</select>
-        <input type="text" class="bf-value" placeholder="value, e.g. US" value="${escapeAttr(value)}">
-      </div>
-      <button type="button" class="remove-row" aria-label="Remove filter">Remove ×</button>
-    `;
-    row.querySelector('.remove-row').addEventListener('click', () => row.remove());
-    baseFiltersEl.appendChild(row);
-  }
 
   function addSegmentRow({ name = '', column = '', contains = '' } = {}) {
     const row = document.createElement('div');
@@ -212,26 +223,12 @@
     return String(value ?? '').replace(/"/g, '&quot;');
   }
 
-  function collectBaseFilters() {
-    return [...baseFiltersEl.querySelectorAll('[data-role="base-filter"]')]
-      .map((row) => ({
-        column: row.querySelector('.bf-column').value.trim(),
-        operator: row.querySelector('.bf-operator').value,
-        value: row.querySelector('.bf-value').value,
-      }))
-      .filter((f) => f.column);
-  }
-
   function collectKeepColumns() {
     return document
       .getElementById('segKeepColumns')
       .value.split(',')
       .map((c) => c.trim())
       .filter(Boolean);
-  }
-
-  function collectDedupeColumn() {
-    return document.getElementById('segDedupeColumn').value.trim();
   }
 
   function collectSegments() {
@@ -242,14 +239,12 @@
     }));
   }
 
-  // Seed with the US / att-vz-tmob carrier-segment workflow as a starting point.
-  addBaseFilterRow({ column: 'country', operator: 'eq', value: 'US' });
+  // Seed with the att/vz/tmob carrier-segment workflow as a starting point.
+  document.getElementById('segKeepColumns').value = 'sub2, sub4';
   addSegmentRow({ name: 'att', column: 'campaign', contains: '_att' });
   addSegmentRow({ name: 'vz', column: 'campaign', contains: '_vz' });
   addSegmentRow({ name: 'tmob', column: 'campaign', contains: '_tmob' });
-  document.getElementById('segDedupeColumn').value = 'sub2';
 
-  document.getElementById('addBaseFilter').addEventListener('click', () => addBaseFilterRow());
   document.getElementById('addSegment').addEventListener('click', () => addSegmentRow());
 
   document.getElementById('previewSegmentsBtn').addEventListener('click', async () => {
@@ -260,10 +255,8 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          baseFilters: collectBaseFilters(),
           keepColumns: collectKeepColumns(),
           segments: collectSegments(),
-          dedupeColumn: collectDedupeColumn(),
         }),
       });
       const data = await res.json();
@@ -286,10 +279,8 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          baseFilters: collectBaseFilters(),
           keepColumns: collectKeepColumns(),
           segments: collectSegments(),
-          dedupeColumn: collectDedupeColumn(),
         }),
       });
       if (!res.ok) {

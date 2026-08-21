@@ -138,6 +138,47 @@ code { font-family: var(--font-mono); }
 .dropzone input { display: none; }
 .dropzone .hint { font-family: var(--font-mono); font-size: 11px; margin-top: 6px; }
 
+/* ---- numbered steps ---- */
+
+.step {
+  border: 1px solid var(--grid);
+  background: var(--paper);
+}
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--grid);
+  background: var(--grid-faint);
+}
+.step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+}
+.step-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.step-result {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+  min-height: 1.4em;
+}
+.step-result.show { color: var(--ink); }
+
 /* ---- ops ---- */
 
 .op {

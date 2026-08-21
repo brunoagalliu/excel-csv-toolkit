@@ -43,6 +43,7 @@ function snapshot(extra = {}) {
       return out;
     }),
     rowCount,
+    originalRowCount: session.originalTable.rowCount,
     previewRows: Math.min(PREVIEW_ROWS, rowCount),
     log: session.log,
     fileBase: session.fileBase,
@@ -61,45 +62,26 @@ function selectColumns(table, columns) {
 }
 
 /**
- * Applies base filters, then dedupes, then splits into segments. Deduping
- * before the per-segment split (rather than within each segment) means a
- * key that appears under two different segments only survives in whichever
- * one its first occurrence belongs to, instead of showing up in both sheets.
+ * Splits `table` into one Table per segment. Filtering to the rows you want
+ * and deduping are separate, earlier steps (see /api/op/keep-rows and
+ * /api/op/dedupe) — this only slices the already-prepared table by each
+ * segment's own contains-filter and keeps the requested columns.
  */
-function buildSegments(table, baseFilters, keepColumns, segments, dedupeColumn) {
-  let base = table;
-  (baseFilters || []).forEach((f) => {
-    if (!f.column) return;
-    base = base.filter((row) => compareValues(row[f.column], f.operator, f.value));
-  });
-
-  if (dedupeColumn) {
-    // .filter(() => true) forces an independent copy — base may still be
-    // the original session table (e.g. no base filters given), and dedupe()
-    // mutates in place, so we must never dedupe that shared reference.
-    base = base.filter(() => true).dedupe((row) => row[dedupeColumn]);
-  }
-
+function buildSegments(table, keepColumns, segments) {
   return segments.map((seg) => {
     const segTable =
       seg.column && seg.contains
-        ? base.filter((row) => compareValues(row[seg.column], 'contains', seg.contains))
-        : base;
+        ? table.filter((row) => compareValues(row[seg.column], 'contains', seg.contains))
+        : table;
     return { name: seg.name, table: selectColumns(segTable, keepColumns) };
   });
 }
 
-function validateSegmentRequest(table, baseFilters, keepColumns, segments, dedupeColumn) {
+function validateSegmentRequest(table, keepColumns, segments) {
   const cols = table.columns;
-  (baseFilters || []).forEach((f) => {
-    if (f.column && !cols.includes(f.column)) throw new Error(`Column "${f.column}" not found.`);
-  });
   (keepColumns || []).forEach((c) => {
     if (!cols.includes(c)) throw new Error(`Column "${c}" not found.`);
   });
-  if (dedupeColumn && !cols.includes(dedupeColumn)) {
-    throw new Error(`Column "${dedupeColumn}" not found.`);
-  }
   if (!segments || !segments.length) throw new Error('Add at least one segment.');
   segments.forEach((seg) => {
     if (!seg.name || !seg.name.trim()) throw new Error('Every segment needs a sheet name.');
@@ -199,6 +181,23 @@ app.post('/api/op/drop-column', (req, res) => {
   res.json(snapshot());
 });
 
+app.post('/api/op/keep-rows', (req, res) => {
+  const s = requireSession(res);
+  if (!s) return;
+  const { column, operator, value } = req.body;
+  if (!s.table.columns.includes(column)) {
+    return res.status(400).json({ error: `Column "${column}" not found.` });
+  }
+  try {
+    const before = s.table.rowCount;
+    s.table = s.table.filter((row) => compareValues(row[column], operator, value));
+    s.log.push(`Filter: kept ${s.table.rowCount} of ${before} rows where ${column} ${operator} ${value}.`);
+    res.json(snapshot());
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 app.post('/api/op/delete-rows', (req, res) => {
   const s = requireSession(res);
   if (!s) return;
@@ -257,8 +256,9 @@ app.post('/api/op/dedupe', (req, res) => {
   }
   const before = s.table.rowCount;
   s.table.dedupe(column ? (row) => row[column] : undefined);
-  const removed = before - s.table.rowCount;
-  s.log.push(`Removed ${removed} duplicate row(s)${column ? ` by "${column}"` : ''}.`);
+  s.log.push(
+    `Unique: kept ${s.table.rowCount} of ${before} rows${column ? ` by "${column}"` : ''} (removed ${before - s.table.rowCount} duplicate(s)).`
+  );
   res.json(snapshot());
 });
 
@@ -289,10 +289,10 @@ app.get('/api/download', async (req, res) => {
 app.post('/api/segment-preview', (req, res) => {
   const s = requireSession(res);
   if (!s) return;
-  const { baseFilters = [], keepColumns = [], segments = [], dedupeColumn = '' } = req.body;
+  const { keepColumns = [], segments = [] } = req.body;
   try {
-    validateSegmentRequest(s.table, baseFilters, keepColumns, segments, dedupeColumn);
-    const built = buildSegments(s.table, baseFilters, keepColumns, segments, dedupeColumn);
+    validateSegmentRequest(s.table, keepColumns, segments);
+    const built = buildSegments(s.table, keepColumns, segments);
     res.json({ counts: built.map((seg) => ({ name: seg.name, rowCount: seg.table.rowCount })) });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -302,10 +302,10 @@ app.post('/api/segment-preview', (req, res) => {
 app.post('/api/export-segments', async (req, res) => {
   const s = requireSession(res);
   if (!s) return;
-  const { baseFilters = [], keepColumns = [], segments = [], dedupeColumn = '' } = req.body;
+  const { keepColumns = [], segments = [] } = req.body;
   try {
-    validateSegmentRequest(s.table, baseFilters, keepColumns, segments, dedupeColumn);
-    const built = buildSegments(s.table, baseFilters, keepColumns, segments, dedupeColumn);
+    validateSegmentRequest(s.table, keepColumns, segments);
+    const built = buildSegments(s.table, keepColumns, segments);
 
     const wb = newXlsx();
     const used = new Set();

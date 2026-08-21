@@ -29,8 +29,68 @@
       </div>
     </div>
 
+    <div class="step" data-step="1">
+      <div class="step-head">
+        <span class="step-badge">1</span>
+        <p class="section-label" style="margin:0;">filter</p>
+      </div>
+      <div class="step-body">
+        <label for="step1-column">Keep rows where</label>
+        <input type="text" id="step1-column" placeholder="column, e.g. country">
+        <div class="seg-line">
+          <select id="step1-operator">
+            <option value="eq">=</option>
+            <option value="neq">≠</option>
+            <option value="gt">&gt;</option>
+            <option value="lt">&lt;</option>
+            <option value="gte">&ge;</option>
+            <option value="lte">&le;</option>
+            <option value="contains">contains</option>
+          </select>
+          <input type="text" id="step1-value" placeholder="value, e.g. US">
+        </div>
+        <button type="button" class="primary" id="step1Apply">Apply filter</button>
+        <div class="step-result" id="step1Result"></div>
+      </div>
+    </div>
+
+    <div class="step" data-step="2">
+      <div class="step-head">
+        <span class="step-badge">2</span>
+        <p class="section-label" style="margin:0;">keep unique</p>
+      </div>
+      <div class="step-body">
+        <label for="step2-column">Unique by column (blank = whole row)</label>
+        <input type="text" id="step2-column" placeholder="sub2">
+        <button type="button" class="primary" id="step2Apply">Apply</button>
+        <div class="step-result" id="step2Result"></div>
+      </div>
+    </div>
+
+    <div class="step" data-step="3">
+      <div class="step-head">
+        <span class="step-badge">3</span>
+        <p class="section-label" style="margin:0;">split into files</p>
+      </div>
+      <div class="step-body">
+        <label for="segKeepColumns">Columns to keep in each sheet</label>
+        <input type="text" id="segKeepColumns" placeholder="sub2, sub4">
+
+        <label style="margin-top:6px;">One sheet per segment</label>
+        <div id="segmentRows"></div>
+        <button type="button" id="addSegment">+ Add segment</button>
+
+        <div id="segCounts" class="log" style="margin-top:4px;"></div>
+
+        <div style="display:flex; gap:8px; margin-top:6px;">
+          <button type="button" id="previewSegmentsBtn">Preview counts</button>
+          <button type="button" class="primary" id="generateSegmentsBtn">Generate workbook</button>
+        </div>
+      </div>
+    </div>
+
     <div>
-      <p class="section-label">B1 — edit</p>
+      <p class="section-label">E1 — other edits</p>
       <div style="display:flex; flex-direction:column; gap:10px;">
 
         <details class="op">
@@ -126,52 +186,11 @@
           </div>
         </details>
 
-        <details class="op">
-          <summary>Remove duplicates</summary>
-          <div class="op-body">
-            <div>
-              <label for="dd-column">Key column (blank = whole row)</label>
-              <input type="text" id="dd-column" placeholder="email">
-            </div>
-            <button data-op="dedupe">Apply</button>
-          </div>
-        </details>
-
       </div>
     </div>
 
     <div>
-      <p class="section-label">C1 — export segments</p>
-      <details class="op" open>
-        <summary>Split into per-segment sheets</summary>
-        <div class="op-body">
-
-          <label>Keep rows where (all must match)</label>
-          <div id="baseFilters"></div>
-          <button type="button" id="addBaseFilter">+ Add filter</button>
-
-          <label for="segKeepColumns" style="margin-top:6px;">Columns to keep in each sheet</label>
-          <input type="text" id="segKeepColumns" placeholder="sub2, sub4">
-
-          <label for="segDedupeColumn" style="margin-top:6px;">Dedupe each sheet by (blank = skip)</label>
-          <input type="text" id="segDedupeColumn" placeholder="sub2">
-
-          <label style="margin-top:6px;">One sheet per segment</label>
-          <div id="segmentRows"></div>
-          <button type="button" id="addSegment">+ Add segment</button>
-
-          <div id="segCounts" class="log" style="margin-top:4px;"></div>
-
-          <div style="display:flex; gap:8px; margin-top:6px;">
-            <button type="button" id="previewSegmentsBtn">Preview counts</button>
-            <button type="button" class="primary" id="generateSegmentsBtn">Generate workbook</button>
-          </div>
-        </div>
-      </details>
-    </div>
-
-    <div>
-      <p class="section-label">D1 — history</p>
+      <p class="section-label">F1 — history</p>
       <div class="log" id="log"></div>
     </div>
   </aside>
