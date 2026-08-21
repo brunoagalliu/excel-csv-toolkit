@@ -255,9 +255,23 @@ app.post('/api/op/dedupe', (req, res) => {
     return res.status(400).json({ error: `Column "${column}" not found.` });
   }
   const before = s.table.rowCount;
+
+  // A blank key (e.g. no phone number) isn't a real value to dedupe on —
+  // two rows both missing one aren't "duplicates" of each other, they're
+  // just not useful, so drop them rather than collapsing them into one.
+  let blankRemoved = 0;
+  if (column) {
+    s.table.deleteRows((row) => row[column] === '' || row[column] == null);
+    blankRemoved = before - s.table.rowCount;
+  }
+  const afterBlanks = s.table.rowCount;
+
   s.table.dedupe(column ? (row) => row[column] : undefined);
+  const kept = s.table.rowCount;
+  const dupRemoved = afterBlanks - kept;
+
   s.log.push(
-    `Unique: kept ${s.table.rowCount} of ${before} rows${column ? ` by "${column}"` : ''} (removed ${before - s.table.rowCount} duplicate(s)).`
+    `Unique: kept ${kept} of ${before} rows${column ? ` by "${column}"` : ''} (removed ${blankRemoved} blank, ${dupRemoved} duplicate(s)).`
   );
   res.json(snapshot());
 });
