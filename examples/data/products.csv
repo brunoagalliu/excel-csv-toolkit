@@ -1,0 +1,5 @@
+name,vendor,price
+Widget,Acme Ltd,49.99
+Gadget,Acme Ltd.,149.99
+Gizmo,BrightCo,-5.00
+Doohickey,BrightCo,199.00

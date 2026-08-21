@@ -1,0 +1,22 @@
+{
+  "name": "excel-csv-toolkit",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "directories": {
+    "example": "examples",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "node --test test/*.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Node.js library for reading, editing, merging, and writing CSV and Excel (.xlsx) files",
+  "type": "commonjs",
+  "dependencies": {
+    "csv-parse": "^7.0.2",
+    "csv-stringify": "^6.8.3",
+    "exceljs": "^4.4.0"
+  }
+}
